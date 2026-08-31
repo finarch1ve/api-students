@@ -1,4 +1,4 @@
-package main
+package model
 
 import "time"
 
@@ -11,14 +11,12 @@ type Student struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// POST — semua field wajib
 type CreateStudentRequest struct {
 	NIM   string  `json:"nim"`
 	Name  string  `json:"name"`
 	Grade float64 `json:"grade"`
 }
 
-// PUT — ganti seluruh isi, field bertipe biasa dan semuanya wajib
 type ReplaceStudentRequest struct {
 	NIM      string  `json:"nim"`
 	Name     string  `json:"name"`
@@ -26,7 +24,6 @@ type ReplaceStudentRequest struct {
 	IsActive bool    `json:"is_active"`
 }
 
-// PATCH — ubah sebagian, field bertipe pointer
 type PatchStudentRequest struct {
 	NIM      *string  `json:"nim,omitempty"`
 	Name     *string  `json:"name,omitempty"`
@@ -34,13 +31,12 @@ type PatchStudentRequest struct {
 	IsActive *bool    `json:"is_active,omitempty"`
 }
 
-// Amplop baku untuk semua respons
 type WebResponse struct {
-	Success bool  `json:"success"`
+	Success bool   `json:"success"`
 	Message string `json:"message"`
-	Data    any   `json:"data,omitempty"`
-	Meta    *Meta `json:"meta,omitempty"`
-	Errors  any   `json:"errors,omitempty"`
+	Data    any    `json:"data,omitempty"`
+	Meta    *Meta  `json:"meta,omitempty"`
+	Errors  any    `json:"errors,omitempty"`
 }
 
 type Meta struct {
@@ -57,4 +53,8 @@ type ListQuery struct {
 	Sort     string
 	Order    string
 	IsActive *bool
+}
+
+func (q ListQuery) Offset() int {
+	return (q.Page - 1) * q.Limit
 }
