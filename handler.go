@@ -3,12 +3,14 @@ package main
 import (
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 
 	"api-students/app/model"
 	"api-students/app/repository"
 	"api-students/app/service"
+	"api-students/helper"
 )
 
 type StudentHandler struct {
@@ -146,4 +148,141 @@ func (h *StudentHandler) Delete(c *fiber.Ctx) error {
 		return terjemahkanError(c, err, "gagal menghapus mahasiswa")
 	}
 	return noContent(c)
+}
+
+// ==================== PRESTASI ====================
+
+type PrestasiHandler struct {
+	svc *service.PrestasiService
+}
+
+func NewPrestasiHandler(svc *service.PrestasiService) *PrestasiHandler {
+	return &PrestasiHandler{svc: svc}
+}
+
+func (h *PrestasiHandler) GetByNIM(c *fiber.Ctx) error {
+	ctx, cancel := reqCtx(c)
+	defer cancel()
+
+	nim := c.Params("nim")
+	if strings.TrimSpace(nim) == "" {
+		return fail(c, fiber.StatusBadRequest, "nim wajib diisi")
+	}
+
+	student, prestasi, err := h.svc.GetByNIM(ctx, nim)
+	if err != nil {
+		return terjemahkanError(c, err, "gagal mengambil data prestasi")
+	}
+
+	return ok(c, "data prestasi berhasil diambil", fiber.Map{
+		"student":  student,
+		"prestasi": prestasi,
+	})
+}
+
+// ==================== AUTH ====================
+
+type AuthHandler struct {
+	svc *service.AuthService
+}
+
+func NewAuthHandler(svc *service.AuthService) *AuthHandler {
+	return &AuthHandler{svc: svc}
+}
+
+func (h *AuthHandler) Register(c *fiber.Ctx) error {
+	ctx, cancel := reqCtx(c)
+	defer cancel()
+
+	var req model.RegisterRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fail(c, fiber.StatusBadRequest, "body harus berupa JSON yang valid")
+	}
+
+	user, err := h.svc.Register(ctx, req)
+	if err != nil {
+		return terjemahkanAuthError(c, err, "gagal mendaftarkan user")
+	}
+
+	return created(c, "pendaftaran berhasil", user, "/api/v1/auth/me")
+}
+
+func (h *AuthHandler) Login(c *fiber.Ctx) error {
+	ctx, cancel := reqCtx(c)
+	defer cancel()
+
+	var req model.LoginRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fail(c, fiber.StatusBadRequest, "body harus berupa JSON yang valid")
+	}
+
+	pair, err := h.svc.Login(ctx, req)
+	if err != nil {
+		return terjemahkanAuthError(c, err, "gagal login")
+	}
+
+	return ok(c, "login berhasil", pair)
+}
+
+func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
+	ctx, cancel := reqCtx(c)
+	defer cancel()
+
+	var req model.RefreshRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fail(c, fiber.StatusBadRequest, "body harus berupa JSON yang valid")
+	}
+
+	pair, err := h.svc.Refresh(ctx, req)
+	if err != nil {
+		return terjemahkanAuthError(c, err, "gagal memperbarui token")
+	}
+
+	return ok(c, "token berhasil diperbarui", pair)
+}
+
+func (h *AuthHandler) Logout(c *fiber.Ctx) error {
+	ctx, cancel := reqCtx(c)
+	defer cancel()
+
+	var req model.RefreshRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fail(c, fiber.StatusBadRequest, "body harus berupa JSON yang valid")
+	}
+
+	_ = h.svc.Logout(ctx, req)
+	return ok(c, "logout berhasil", nil)
+}
+
+func (h *AuthHandler) Me(c *fiber.Ctx) error {
+	ctx, cancel := reqCtx(c)
+	defer cancel()
+
+	authUser, ok2 := helper.CurrentUser(c)
+	if !ok2 {
+		return fail(c, fiber.StatusUnauthorized, "belum terautentikasi")
+	}
+
+	user, err := h.svc.Me(ctx, authUser.UserID)
+	if err != nil {
+		return fail(c, fiber.StatusUnauthorized, "user tidak ditemukan")
+	}
+
+	return ok(c, "profil berhasil diambil", user)
+}
+
+func terjemahkanAuthError(c *fiber.Ctx, err error, pesanUmum string) error {
+	var valErr *service.ValidationError
+	switch {
+	case errors.As(err, &valErr):
+		return failValidation(c, valErr.Errors)
+	case errors.Is(err, repository.ErrDuplicate):
+		return fail(c, fiber.StatusConflict, "username sudah dipakai")
+	case errors.Is(err, service.ErrInvalidCredentials):
+		return fail(c, fiber.StatusUnauthorized, "username atau password salah")
+	case errors.Is(err, service.ErrAccountDisabled):
+		return fail(c, fiber.StatusForbidden, "akun dinonaktifkan")
+	default:
+		return fail(c, fiber.StatusInternalServerError, pesanUmum)
+	}
 }

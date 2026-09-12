@@ -20,6 +20,7 @@ var (
 type StudentRepository interface {
 	FindAll(ctx context.Context, q model.ListQuery) ([]model.Student, int, error)
 	FindByID(ctx context.Context, id int) (model.Student, error)
+	FindByNIM(ctx context.Context, nim string) (model.Student, error)
 	Create(ctx context.Context, s model.Student) (model.Student, error)
 	Update(ctx context.Context, s model.Student) (model.Student, error)
 	Delete(ctx context.Context, id int) error
@@ -115,6 +116,24 @@ func (r *studentPostgresRepository) FindByID(
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, nim, name, grade, is_active, created_at
 		 FROM students WHERE id = $1`, id,
+	).Scan(&s.ID, &s.NIM, &s.Name, &s.Grade, &s.IsActive, &s.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.Student{}, ErrNotFound
+		}
+		return model.Student{}, fmt.Errorf("mengambil student: %w", err)
+	}
+	return s, nil
+}
+
+// FindByNIM mencari mahasiswa berdasarkan NIM (dipakai endpoint prestasi).
+func (r *studentPostgresRepository) FindByNIM(
+	ctx context.Context, nim string,
+) (model.Student, error) {
+	var s model.Student
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, nim, name, grade, is_active, created_at
+		 FROM students WHERE nim = $1`, nim,
 	).Scan(&s.ID, &s.NIM, &s.Name, &s.Grade, &s.IsActive, &s.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

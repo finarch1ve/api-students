@@ -11,14 +11,15 @@ import (
 )
 
 // NewApp merakit aplikasi Fiber: config dasar, middleware, lalu route.
-func NewApp(logger *slog.Logger, pool route.PingDB, handlers route.StudentHandlers) *fiber.App {
+func NewApp(logger *slog.Logger, deps route.Dependencies) *fiber.App {
 	app := fiber.New(fiber.Config{
-		AppName:      GetEnv("APP_NAME", "API Students - Tugas Mandiri Pertemuan 4"),
+		AppName:      GetEnv("APP_NAME", "API Students - Tugas Mandiri Pertemuan 5"),
 		ErrorHandler: newErrorHandler(logger),
+		BodyLimit:    1 * 1024 * 1024, // 1 MB
 	})
 
 	middleware.Register(app, logger)
-	route.Register(app, pool, handlers)
+	route.Register(app, deps)
 
 	return app
 }
