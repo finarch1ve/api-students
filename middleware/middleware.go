@@ -24,20 +24,30 @@ func Register(app *fiber.App, logger *slog.Logger) {
 }
 
 // RequestLogger mencatat setiap request sebagai satu baris JSON.
+// Bila request sudah melewati RequireAuth, identitas pemanggil ikut dicatat
+// supaya penolakan (403) bisa ditelusuri: siapa, dengan role apa.
 func RequestLogger(logger *slog.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		start := time.Now()
 		err := c.Next()
 
 		requestID, _ := c.Locals("requestid").(string)
-		logger.Info("http_request",
+		attrs := []any{
 			slog.String("request_id", requestID),
 			slog.String("method", c.Method()),
 			slog.String("path", c.Path()),
 			slog.Int("status", c.Response().StatusCode()),
 			slog.Duration("duration", time.Since(start)),
 			slog.String("ip", c.IP()),
-		)
+		}
+
+		if user, ok := helper.CurrentUser(c); ok {
+			attrs = append(attrs,
+				slog.Int("user_id", user.UserID),
+				slog.String("role", user.Role))
+		}
+
+		logger.Info("http_request", attrs...)
 		return err
 	}
 }

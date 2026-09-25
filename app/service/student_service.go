@@ -6,12 +6,12 @@ import (
 
 	"api-students/app/model"
 	"api-students/app/repository"
+	"api-students/helper"
 )
 
-// ErrNoFieldsToUpdate dipakai saat request PATCH tidak mengubah field apa pun.
 var ErrNoFieldsToUpdate = errors.New("tidak ada field yang diubah")
+var ErrForbidden = errors.New("tidak berhak mengakses data ini")
 
-// ValidationError merepresentasikan kumpulan error validasi per field.
 type ValidationError struct {
 	Errors map[string]string
 }
@@ -28,11 +28,12 @@ func newValidationError(errs map[string]string) error {
 }
 
 type StudentService struct {
-	repo repository.StudentRepository
+	repo  repository.StudentRepository
+	perms *helper.PermissionSet
 }
 
-func NewStudentService(repo repository.StudentRepository) *StudentService {
-	return &StudentService{repo: repo}
+func NewStudentService(repo repository.StudentRepository, perms *helper.PermissionSet) *StudentService {
+	return &StudentService{repo: repo, perms: perms}
 }
 
 func (s *StudentService) List(ctx context.Context, q model.ListQuery) ([]model.Student, model.Meta, error) {
@@ -46,11 +47,18 @@ func (s *StudentService) List(ctx context.Context, q model.ListQuery) ([]model.S
 	}, nil
 }
 
-func (s *StudentService) Get(ctx context.Context, id int) (model.Student, error) {
-	return s.repo.FindByID(ctx, id)
+func (s *StudentService) Get(ctx context.Context, current model.AuthUser, id int) (model.Student, error) {
+	student, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return model.Student{}, err
+	}
+	if !CanAccessStudent(current, student.OwnerID, s.perms, "student:read:any") {
+		return model.Student{}, ErrForbidden
+	}
+	return student, nil
 }
 
-func (s *StudentService) Create(ctx context.Context, req model.CreateStudentRequest) (model.Student, error) {
+func (s *StudentService) Create(ctx context.Context, ownerID int, req model.CreateStudentRequest) (model.Student, error) {
 	if errs := ValidateCreate(req); len(errs) > 0 {
 		return model.Student{}, newValidationError(errs)
 	}
@@ -60,10 +68,19 @@ func (s *StudentService) Create(ctx context.Context, req model.CreateStudentRequ
 		Name:     req.Name,
 		Grade:    req.Grade,
 		IsActive: true,
+		OwnerID:  ownerID, // selalu dari identitas pemanggil, TIDAK dari body request
 	})
 }
 
-func (s *StudentService) Replace(ctx context.Context, id int, req model.ReplaceStudentRequest) (model.Student, error) {
+func (s *StudentService) Replace(ctx context.Context, current model.AuthUser, id int, req model.ReplaceStudentRequest) (model.Student, error) {
+	existing, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return model.Student{}, err
+	}
+	if !CanAccessStudent(current, existing.OwnerID, s.perms, "student:update:any") {
+		return model.Student{}, ErrForbidden
+	}
+
 	if errs := ValidateReplace(req); len(errs) > 0 {
 		return model.Student{}, newValidationError(errs)
 	}
@@ -77,7 +94,7 @@ func (s *StudentService) Replace(ctx context.Context, id int, req model.ReplaceS
 	})
 }
 
-func (s *StudentService) Patch(ctx context.Context, id int, req model.PatchStudentRequest) (model.Student, error) {
+func (s *StudentService) Patch(ctx context.Context, current model.AuthUser, id int, req model.PatchStudentRequest) (model.Student, error) {
 	if IsEmptyPatch(req) {
 		return model.Student{}, ErrNoFieldsToUpdate
 	}
@@ -85,6 +102,9 @@ func (s *StudentService) Patch(ctx context.Context, id int, req model.PatchStude
 	saatIni, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return model.Student{}, err
+	}
+	if !CanAccessStudent(current, saatIni.OwnerID, s.perms, "student:update:any") {
+		return model.Student{}, ErrForbidden
 	}
 
 	updated, errs := ApplyPatch(saatIni, req)

@@ -36,6 +36,8 @@ func terjemahkanError(c *fiber.Ctx, err error, pesanUmum string) error {
 		return failValidation(c, valErr.Errors)
 	case errors.Is(err, service.ErrNoFieldsToUpdate):
 		return fail(c, fiber.StatusBadRequest, err.Error())
+	case errors.Is(err, service.ErrForbidden):
+		return fail(c, fiber.StatusForbidden, err.Error())
 	case errors.Is(err, repository.ErrNotFound):
 		return fail(c, fiber.StatusNotFound, "mahasiswa tidak ditemukan")
 	case errors.Is(err, repository.ErrDuplicate):
@@ -62,12 +64,17 @@ func (h *StudentHandler) Get(c *fiber.Ctx) error {
 	ctx, cancel := reqCtx(c)
 	defer cancel()
 
+	current, authOK := helper.CurrentUser(c)
+	if !authOK {
+		return fail(c, fiber.StatusUnauthorized, "belum terautentikasi")
+	}
+
 	id, valid := paramID(c)
 	if !valid {
 		return fail(c, fiber.StatusBadRequest, "id harus berupa angka positif")
 	}
 
-	student, err := h.svc.Get(ctx, id)
+	student, err := h.svc.Get(ctx, current, id)
 	if err != nil {
 		return terjemahkanError(c, err, "gagal mengambil data mahasiswa")
 	}
@@ -78,12 +85,17 @@ func (h *StudentHandler) Create(c *fiber.Ctx) error {
 	ctx, cancel := reqCtx(c)
 	defer cancel()
 
+	current, authOK := helper.CurrentUser(c)
+	if !authOK {
+		return fail(c, fiber.StatusUnauthorized, "belum terautentikasi")
+	}
+
 	var req model.CreateStudentRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fail(c, fiber.StatusBadRequest, "body harus berupa JSON yang valid")
 	}
 
-	baru, err := h.svc.Create(ctx, req)
+	baru, err := h.svc.Create(ctx, current.UserID, req)
 	if err != nil {
 		return terjemahkanError(c, err, "gagal menyimpan mahasiswa")
 	}
@@ -95,6 +107,11 @@ func (h *StudentHandler) Replace(c *fiber.Ctx) error {
 	ctx, cancel := reqCtx(c)
 	defer cancel()
 
+	current, authOK := helper.CurrentUser(c)
+	if !authOK {
+		return fail(c, fiber.StatusUnauthorized, "belum terautentikasi")
+	}
+
 	id, valid := paramID(c)
 	if !valid {
 		return fail(c, fiber.StatusBadRequest, "id harus berupa angka positif")
@@ -105,7 +122,7 @@ func (h *StudentHandler) Replace(c *fiber.Ctx) error {
 		return fail(c, fiber.StatusBadRequest, "body harus berupa JSON yang valid")
 	}
 
-	hasil, err := h.svc.Replace(ctx, id, req)
+	hasil, err := h.svc.Replace(ctx, current, id, req)
 	if err != nil {
 		return terjemahkanError(c, err, "gagal memperbarui mahasiswa")
 	}
@@ -117,6 +134,11 @@ func (h *StudentHandler) Patch(c *fiber.Ctx) error {
 	ctx, cancel := reqCtx(c)
 	defer cancel()
 
+	current, authOK := helper.CurrentUser(c)
+	if !authOK {
+		return fail(c, fiber.StatusUnauthorized, "belum terautentikasi")
+	}
+
 	id, valid := paramID(c)
 	if !valid {
 		return fail(c, fiber.StatusBadRequest, "id harus berupa angka positif")
@@ -127,7 +149,7 @@ func (h *StudentHandler) Patch(c *fiber.Ctx) error {
 		return fail(c, fiber.StatusBadRequest, "body harus berupa JSON yang valid")
 	}
 
-	hasil, err := h.svc.Patch(ctx, id, req)
+	hasil, err := h.svc.Patch(ctx, current, id, req)
 	if err != nil {
 		return terjemahkanError(c, err, "gagal memperbarui mahasiswa")
 	}
@@ -258,8 +280,8 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 	ctx, cancel := reqCtx(c)
 	defer cancel()
 
-	authUser, ok2 := helper.CurrentUser(c)
-	if !ok2 {
+	authUser, authOK := helper.CurrentUser(c)
+	if !authOK {
 		return fail(c, fiber.StatusUnauthorized, "belum terautentikasi")
 	}
 

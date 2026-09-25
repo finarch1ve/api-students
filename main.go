@@ -44,9 +44,19 @@ func main() {
 		time.Duration(config.GetEnvInt("JWT_ACCESS_TTL_MINUTES", 15))*time.Minute,
 	)
 
+	// 2b. Muat pemetaan role -> permission SEKALI saat aplikasi menyala.
+	roleRepository := repository.NewRoleRepository(pool)
+	rawPermissions, err := roleRepository.LoadPermissions(context.Background())
+	if err != nil {
+		logger.Error("gagal memuat permission", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	permissions := helper.NewPermissionSet(rawPermissions)
+	logger.Info("permission dimuat", slog.Any("roles", permissions.KnownRoles()))
+
 	// 3. Perakitan: repository -> service -> handler
 	studentRepository := repository.NewStudentRepository(pool)
-	studentService := service.NewStudentService(studentRepository)
+	studentService := service.NewStudentService(studentRepository, permissions)
 	studentHandler := NewStudentHandler(studentService)
 
 	prestasiRepository := repository.NewPrestasiRepository(pool)
@@ -63,8 +73,9 @@ func main() {
 
 	// 4. Aplikasi
 	app := config.NewApp(logger, route.Dependencies{
-		Pool: pool,
-		JWT:  jwtManager,
+		Pool:        pool,
+		JWT:         jwtManager,
+		Permissions: permissions,
 		Students: route.StudentHandlers{
 			List:             studentHandler.List,
 			Get:              studentHandler.Get,

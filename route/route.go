@@ -37,10 +37,11 @@ type AuthHandlers struct {
 
 // Dependencies mengumpulkan semua yang dibutuhkan Register dalam satu struct.
 type Dependencies struct {
-	Pool     PingDB
-	JWT      *helper.JWTManager
-	Students StudentHandlers
-	Auth     AuthHandlers
+	Pool        PingDB
+	JWT         *helper.JWTManager
+	Permissions *helper.PermissionSet
+	Students    StudentHandlers
+	Auth        AuthHandlers
 }
 
 // Register mendaftarkan seluruh route API ke aplikasi Fiber.
@@ -65,15 +66,20 @@ func Register(app *fiber.App, deps Dependencies) {
 	auth.Post("/logout", deps.Auth.Logout)
 	auth.Get("/me", middleware.RequireAuth(deps.JWT), deps.Auth.Me)
 
-	// --- wajib membawa access token ---
+	// --- wajib membawa access token; hak akses diperiksa per endpoint ---
 	s := api.Group("/students", middleware.RequireJSON, middleware.RequireAuth(deps.JWT))
-	s.Get("/", deps.Students.List)
+	perms := deps.Permissions
+
+	// Hak dapat diputuskan tanpa melihat data -> middleware.
+	s.Get("/", middleware.RequirePermission(perms, "student:list"), deps.Students.List)
+	s.Post("/", middleware.RequirePermission(perms, "student:create"), deps.Students.Create)
+	s.Delete("/:id", middleware.RequirePermission(perms, "student:delete"), deps.Students.Delete)
+
+	// Hak bergantung pada kepemilikan data -> diperiksa di service.
 	s.Get("/:id", deps.Students.Get)
-	s.Post("/", deps.Students.Create)
 	s.Put("/:id", deps.Students.Replace)
 	s.Patch("/:id", deps.Students.Patch)
-	s.Delete("/:id", deps.Students.Delete)
-	s.Get("/nim/:nim/prestasi", deps.Students.GetPrestasiByNIM)
+	s.Get("/nim/:nim/prestasi", middleware.RequirePermission(perms, "student:read:any"), deps.Students.GetPrestasiByNIM)
 
 	app.Use(func(c *fiber.Ctx) error {
 		return helper.Fail(c, fiber.StatusNotFound, "endpoint tidak ditemukan")
