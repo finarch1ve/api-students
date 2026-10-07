@@ -19,4 +19,9 @@ func main() {
 		log.Fatal("Gagal migrasi: ", err)
 	}
 	log.Println("Migrasi selesai")
+
+	if err := database.Seed(db); err != nil {
+		log.Fatal("Gagal seeding: ", err)
+	}
+	log.Println("Seeder selesai")
 }
