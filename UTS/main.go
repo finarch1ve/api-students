@@ -6,13 +6,17 @@ import (
 
 	"siakad-mini/config"
 	"siakad-mini/database"
-	"siakad-mini/helper"
+	"siakad-mini/route"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 func main() {
 	config.LoadEnv()
+
+	if os.Getenv("JWT_SECRET") == "" {
+		log.Fatal("JWT_SECRET belum diisi di .env")
+	}
 
 	db, err := config.ConnectDB()
 	if err != nil {
@@ -30,10 +34,7 @@ func main() {
 	log.Println("Seeder selesai")
 
 	app := fiber.New(fiber.Config{ErrorHandler: config.ErrorHandler})
-
-	app.Get("/api/v1/ping", func(c *fiber.Ctx) error {
-		return helper.Success(c, fiber.StatusOK, "API SIAKAD Mini berjalan", nil)
-	})
+	route.Setup(app, db)
 
 	port := os.Getenv("APP_PORT")
 	if port == "" {
