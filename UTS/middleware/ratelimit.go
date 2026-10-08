@@ -11,8 +11,9 @@ import (
 
 func LoginLimiter() fiber.Handler {
 	return limiter.New(limiter.Config{
-		Max:        5,
-		Expiration: time.Minute,
+		Max:                    5,
+		Expiration:             time.Minute,
+		SkipSuccessfulRequests: true,
 		KeyGenerator: func(c *fiber.Ctx) string {
 			return c.IP()
 		},
