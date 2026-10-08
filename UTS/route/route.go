@@ -22,4 +22,12 @@ func Setup(app *fiber.App, db *gorm.DB) {
 	students.Get("/:id", st.Show)
 	students.Put("/:id", middleware.RequireRole("admin"), st.Update)
 	students.Delete("/:id", middleware.RequireRole("admin"), st.Delete)
+
+	cr := &handler.CourseHandler{DB: db}
+	api.Get("/courses", middleware.AuthRequired(), cr.List)
+
+	en := &handler.EnrollmentHandler{DB: db}
+	enr := api.Group("/enrollments", middleware.AuthRequired(), middleware.RequireRole("mahasiswa"))
+	enr.Post("/", en.Create)
+	enr.Delete("/:id", en.Delete)
 }
