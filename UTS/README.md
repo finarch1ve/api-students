@@ -34,4 +34,4 @@ Seeder membuat 1 admin, 20 mahasiswa, dan 10 mata kuliah. Contoh: `mhs01@siakad.
 Semua endpoint selain login memerlukan header `Authorization: Bearer <token>`.
 
 ## Laporan
-Laporan pengujian lengkap ada pada file `Laporan-UTS.pdf` di folder ini.
+Laporan pengujian lengkap ada pada file `UTS PBL PRAK_434241128.pdf` di folder ini.
